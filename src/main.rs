@@ -1,4 +1,4 @@
-use tetra::graphics::{self, Color, Texture, DrawParams};
+use tetra::graphics::{self, Color, Texture, DrawParams, Rectangle};
 use tetra::input::{self, Key};
 use tetra::math::Vec2;
 use tetra::{Context, ContextBuilder, State};
@@ -17,6 +17,7 @@ struct Player {
 struct Ball {
     texture: Texture, 
     position: Vec2<f32>,
+    velocity: Vec2<f32>,
 }
 
 struct GameState {
@@ -24,6 +25,9 @@ struct GameState {
     player2: Player,
     ball: Ball,
 }
+
+// First game random player starts. 
+// After that winner of previous game starts 
 
 impl GameState {
     fn new(ctx: &mut Context) -> tetra::Result<GameState> {
@@ -39,14 +43,15 @@ impl GameState {
 
         let ball_texture = Texture::new(ctx, "resources/png/ballGrey.png")?;
         let ball_position = Vec2::new(
-                WINDOW_WIDTH / 2.0 - ball_texture.width() as f32 / 2.0,
+                WINDOW_WIDTH  / 2.0 - ball_texture.width()  as f32 / 2.0,
                 WINDOW_HEIGHT / 2.0 - ball_texture.height() as f32 / 2.0
             );
+        let ball_velocity = Vec2::new(BALL_SPEED, 0.0);
 
         Ok(GameState {
             player1: Player::new(player1_texture, player1_position),
             player2: Player::new(player2_texture, player2_position),
-            ball: Ball::new(ball_texture, ball_position),
+            ball: Ball::new(ball_texture, ball_position, ball_velocity),
         })
     }
 }
@@ -78,6 +83,24 @@ impl State for GameState {
         if input::is_key_down(ctx, Key::Down) {
             self.player2.params.position.y += PADDLE_SPEED;
         }
+
+        let player1_bounds = self.player1.bounds();
+        let player2_bounds = self.player2.bounds();
+        let ball_bounds = self.ball.bounds();
+
+        let paddle_hit= if ball_bounds.intersects(&player1_bounds) {
+            Some(&self.player1)
+        } else if ball_bounds.intersects(&player2_bounds) {
+            Some(&self.player2)
+        } else {
+            None
+        };
+
+        if paddle_hit.is_some() {
+            self.ball.velocity.x = -self.ball.velocity.x;
+        }
+
+        self.ball.position += self.ball.velocity;
         Ok(())
     }
 }
@@ -86,11 +109,29 @@ impl Player {
     fn new(texture:Texture, params:DrawParams) -> Player {
         Player{texture, params}
     }
+
+    fn bounds(&self) -> Rectangle {
+        Rectangle::new(
+            self.params.position.x - self.texture.height() as f32,
+            self.params.position.y,
+            self.texture.height() as f32,
+            self.texture.width() as f32,
+        )
+    }
 }
 
 impl Ball {
-    fn new(texture:Texture, position:Vec2<f32>) -> Ball {
-        Ball{texture, position}
+    fn new(texture:Texture, position:Vec2<f32>, velocity:Vec2<f32>) -> Ball {
+        Ball{texture, position, velocity}
+    }
+
+    fn bounds(&self) -> Rectangle {
+        Rectangle::new(
+            self.position.x,
+            self.position.y,
+            self.texture.width() as f32,
+            self.texture.height() as f32,
+        )
     }
 }
 
