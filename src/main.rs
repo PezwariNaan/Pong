@@ -6,8 +6,10 @@ use std::f32::consts::PI;
 
 const WINDOW_WIDTH: f32 = 640.0;
 const WINDOW_HEIGHT: f32 = 480.0;
-const PADDLE_SPEED: f32 = 8.0;
-const BALL_SPEED: f32 = 5.0;
+const PADDLE_SPEED: f32 = 6.0;
+const BALL_SPEED: f32 = 4.0;
+const PADDLE_SPIN: f32 = 2.0;
+const BALL_ACCELERATION:f32 = 0.05;
 
 struct Player {
     texture: Texture,
@@ -24,10 +26,10 @@ struct GameState {
     player1: Player,
     player2: Player,
     ball: Ball,
+    hits: i32,
 }
 
-// First game random player starts. 
-// After that winner of previous game starts 
+// Random player starts. 
 
 impl GameState {
     fn new(ctx: &mut Context) -> tetra::Result<GameState> {
@@ -52,6 +54,7 @@ impl GameState {
             player1: Player::new(player1_texture, player1_position),
             player2: Player::new(player2_texture, player2_position),
             ball: Ball::new(ball_texture, ball_position, ball_velocity),
+            hits: 0,
         })
     }
 }
@@ -68,6 +71,18 @@ impl State for GameState {
     }
 
     fn update(&mut self, ctx: &mut Context) -> tetra::Result {
+        if self.ball.position.x <= 0.0 {
+            tetra::window::quit(ctx);
+            println!("Player 2, Wins!");
+        }
+
+        if self.ball.position.x >= WINDOW_WIDTH {
+            tetra::window::quit(ctx);
+            println!("Player1, Wins!");
+        }
+
+        self.ball.position += self.ball.velocity;
+
         if input::is_key_down(ctx, Key::W) {
             self.player1.params.position.y -= PADDLE_SPEED;
         }
@@ -96,11 +111,27 @@ impl State for GameState {
             None
         };
 
-        if paddle_hit.is_some() {
-            self.ball.velocity.x = -self.ball.velocity.x;
+        // Logic for adding spin to ball
+        // Angle of reflection depends on the paddles y velocity 
+        // Spin is commulative (affects angle of reflection from boundaries)
+        if let Some(paddle) = paddle_hit {
+            self.ball.velocity.x =
+                -(self.ball.velocity.x  + (BALL_ACCELERATION * self.ball.velocity.x.signum()));
+
+            let offset = paddle.centre() - self.ball.centre() / paddle.texture.height() as f32;
+
+            self.ball.velocity.y += PADDLE_SPIN * -offset;
+
+            println!("Offset: {}", offset);
+            //self.hits += 1;
+            println!("Y Speed : {}", self.ball.velocity.y);
         }
 
-        self.ball.position += self.ball.velocity;
+        if self.ball.position.y <= 0.0 || 
+            self.ball.position.y + self.ball.texture.height() as f32 >= WINDOW_HEIGHT {
+            self.ball.velocity.y = -self.ball.velocity.y;
+        }
+
         Ok(())
     }
 }
@@ -118,6 +149,10 @@ impl Player {
             self.texture.width() as f32,
         )
     }
+
+    fn centre(&self) -> f32 {
+        self.params.position.y + self.texture.height() as f32 / 2.0
+    }
 }
 
 impl Ball {
@@ -132,6 +167,10 @@ impl Ball {
             self.texture.width() as f32,
             self.texture.height() as f32,
         )
+    }
+
+    fn centre(&self) -> f32 {
+        self.position.y + self.texture.height() as f32 / 2.0
     }
 }
 
